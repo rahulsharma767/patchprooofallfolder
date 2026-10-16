@@ -1,0 +1,54 @@
+
+name: PatchProof Daily Checks
+
+on:
+  schedule:
+    - cron: "30 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check 10-day date window
+        id: window
+        shell: bash
+        run: |
+          today="$(date -u +%F)"
+          if [[ "$today" < "2026-10-16" || "$today" > "2026-10-25" ]]; then
+            echo "active=false" >> "$GITHUB_OUTPUT"
+            echo "The 10-day window has ended. Skipping checks."
+          else
+            echo "active=true" >> "$GITHUB_OUTPUT"
+            echo "Running PatchProof checks for $today."
+          fi
+
+      - name: Checkout repository
+        if: steps.window.outputs.active == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: steps.window.outputs.active == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: steps.window.outputs.active == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        if: steps.window.outputs.active == 'true'
+        working-directory: frontend
+        run: npm test
+
+      - name: Build production frontend
+        if: steps.window.outputs.active == 'true'
+        working-directory: frontend
+        run: npm run build
